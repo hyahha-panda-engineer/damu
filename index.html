@@ -3,52 +3,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>宇連ダム・大島ダム 貯水量＆流入量モニタリング</title>
+  <title>宇連ダム・大島ダム 貯水＆流入量モニタリング</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    /* ダークテーマ＆オレンジ基調のCSS変数 */
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --text-main: #e0e0e0;
+      --text-muted: #a0a0a0;
+      --accent-orange: #ff9800;
+      --accent-yellow: #ffca28;
+      --border-color: #333333;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
       max-width: 1000px;
       margin: 0 auto;
-      padding: 20px;
-      background-color: #f4f7f9;
-      color: #333;
+      padding: 30px 20px;
     }
-    h1 { font-size: 1.5rem; margin-bottom: 20px; color: #1a252f; }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 24px;
+      color: var(--text-main);
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+
     .card {
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-      margin-bottom: 20px;
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      margin-bottom: 24px;
+      border: 1px solid var(--border-color);
     }
-    .update-time { font-size: 0.9rem; color: #666; margin-bottom: 15px; }
+
+    .update-time { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; }
+    .update-time span { color: var(--accent-orange); font-weight: bold; }
+
     .metrics-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 15px;
+      gap: 20px;
     }
+
     .dam-card {
-      padding: 15px;
-      background-color: #f8fafc;
-      border-radius: 6px;
-      border-left: 5px solid #ccc;
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      border-left: 6px solid;
     }
-    .dam-card.uren { border-left-color: #0066cc; }
-    .dam-card.oshima { border-left-color: #009966; }
-    .dam-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
-    .metric-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 5px;
-    }
-    .metric-label { font-size: 0.85rem; color: #555; }
-    .metric-value { font-size: 1.3rem; font-weight: bold; }
-    .uren-text { color: #0066cc; }
-    .oshima-text { color: #009966; }
+    .dam-card.uren { border-left-color: var(--accent-orange); }
+    .dam-card.oshima { border-left-color: var(--accent-yellow); }
+
+    .dam-title { font-weight: bold; font-size: 1.2rem; margin-bottom: 16px; letter-spacing: 1px; }
+    .metric-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .metric-label { font-size: 0.9rem; color: var(--text-muted); }
+    .metric-value { font-size: 1.4rem; font-weight: bold; }
+    
+    .uren-text { color: var(--accent-orange); }
+    .oshima-text { color: var(--accent-yellow); }
+
     .chart-container { position: relative; height: 450px; width: 100%; }
+    .error-msg { color: #f44336; text-align: center; padding: 40px; }
   </style>
 </head>
 <body>
@@ -56,7 +80,7 @@
   <h1>豊川用水 貯水状況＆流入量ダッシュボード</h1>
 
   <div class="card">
-    <div class="update-time">最新測定日時: <span id="latest-time" style="font-weight: bold;">-</span></div>
+    <div class="update-time">最新測定日時: <span id="latest-time">-</span></div>
     
     <div class="metrics-grid">
       <!-- 宇連ダム -->
@@ -102,9 +126,13 @@
   </div>
 
   <script>
+    // Chart.js の全体設定（ダークテーマ用）
+    Chart.defaults.color = '#a0a0a0';
+    Chart.defaults.font.family = '"Helvetica Neue", Arial, sans-serif';
+
     async function initDashboard() {
       try {
-        const response = await fetch('./data/dam_data.json?t=' + new Date().getTime());
+        const response = await fetch('./data/dam_data.json?t=' + Date.now());
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         
         const data = await response.json();
@@ -113,17 +141,15 @@
         const latest = data[data.length - 1];
         document.getElementById('latest-time').textContent = latest.datetime || '-';
 
-        if (latest.uren) {
-          document.getElementById('uren-rate').textContent = `${latest.uren.storage_rate ?? '-'} %`;
-          document.getElementById('uren-vol').textContent = `${(latest.uren.storage_volume ?? 0).toLocaleString()} 千m³`;
-          document.getElementById('uren-inflow').textContent = `${latest.uren.inflow ?? '-'} m³/s`;
-        }
+        const updateMetrics = (prefix, damData) => {
+          if (!damData) return;
+          document.getElementById(`${prefix}-rate`).textContent = `${damData.storage_rate ?? '-'} %`;
+          document.getElementById(`${prefix}-vol`).textContent = `${(damData.storage_volume ?? 0).toLocaleString()} 千m³`;
+          document.getElementById(`${prefix}-inflow`).textContent = `${damData.inflow ?? '-'} m³/s`;
+        };
 
-        if (latest.oshima) {
-          document.getElementById('oshima-rate').textContent = `${latest.oshima.storage_rate ?? '-'} %`;
-          document.getElementById('oshima-vol').textContent = `${(latest.oshima.storage_volume ?? 0).toLocaleString()} 千m³`;
-          document.getElementById('oshima-inflow').textContent = `${latest.oshima.inflow ?? '-'} m³/s`;
-        }
+        updateMetrics('uren', latest.uren);
+        updateMetrics('oshima', latest.oshima);
 
         const labels = data.map(item => item.datetime ? item.datetime.slice(5) : '');
         
@@ -133,39 +159,39 @@
           data: {
             labels: labels,
             datasets: [
-              // 貯水率 (左Y軸: yRate)
               {
                 label: '宇連 貯水率 (%)',
                 data: data.map(item => item.uren?.storage_rate ?? null),
-                borderColor: '#0066cc',
-                backgroundColor: 'rgba(0, 102, 204, 0.05)',
+                borderColor: '#ff9800',
+                backgroundColor: 'rgba(255, 152, 0, 0.1)',
                 yAxisID: 'yRate',
-                tension: 0.2
+                tension: 0.3,
+                fill: true
               },
               {
                 label: '大島 貯水率 (%)',
                 data: data.map(item => item.oshima?.storage_rate ?? null),
-                borderColor: '#009966',
-                backgroundColor: 'rgba(0, 153, 102, 0.05)',
+                borderColor: '#ffca28',
+                backgroundColor: 'rgba(255, 202, 40, 0.1)',
                 yAxisID: 'yRate',
-                tension: 0.2
+                tension: 0.3,
+                fill: true
               },
-              // 流入量 (右Y軸: yInflow / 破線表示)
               {
                 label: '宇連 流入量 (m³/s)',
                 data: data.map(item => item.uren?.inflow ?? null),
-                borderColor: '#ff9900',
-                borderDash: [5, 5],
+                borderColor: '#f44336', // 流入量は赤系オレンジで区別
+                borderDash: [4, 4],
                 yAxisID: 'yInflow',
-                tension: 0.2
+                tension: 0.3
               },
               {
                 label: '大島 流入量 (m³/s)',
                 data: data.map(item => item.oshima?.inflow ?? null),
-                borderColor: '#cc3399',
-                borderDash: [5, 5],
+                borderColor: '#ffeb3b', 
+                borderDash: [4, 4],
                 yAxisID: 'yInflow',
-                tension: 0.2
+                tension: 0.3
               }
             ]
           },
@@ -175,18 +201,17 @@
             interaction: { mode: 'index', intersect: false },
             scales: {
               yRate: {
-                type: 'linear',
-                position: 'left',
-                min: 0,
-                max: 100,
-                title: { display: true, text: '貯水率 (%)' }
+                type: 'linear', position: 'left', min: 0, max: 100,
+                title: { display: true, text: '貯水率 (%)', color: '#e0e0e0' },
+                grid: { color: '#333333' }
               },
               yInflow: {
-                type: 'linear',
-                position: 'right',
-                min: 0,
-                title: { display: true, text: '流入量 (m³/s)' },
-                grid: { drawOnChartArea: false } // 右軸のグリッド線を重ねない
+                type: 'linear', position: 'right', min: 0,
+                title: { display: true, text: '流入量 (m³/s)', color: '#e0e0e0' },
+                grid: { drawOnChartArea: false } 
+              },
+              x: {
+                grid: { color: '#333333' }
               }
             }
           }
@@ -195,7 +220,7 @@
       } catch (error) {
         console.error(error);
         document.querySelector('.chart-container').innerHTML = 
-          `<p style="color:red; text-align:center; padding-top:50px;">データ読み込み失敗: ${error.message}</p>`;
+          `<p class="error-msg">データの読み込みに失敗しました: ${error.message}</p>`;
       }
     }
 
