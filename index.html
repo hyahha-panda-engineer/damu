@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>宇連ダム・大島ダム 貯水量＆流入量モニタリング</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f4f7f9;
+      color: #333;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 20px; color: #1a252f; }
+    .card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+    .update-time { font-size: 0.9rem; color: #666; margin-bottom: 15px; }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+    }
+    .dam-card {
+      padding: 15px;
+      background-color: #f8fafc;
+      border-radius: 6px;
+      border-left: 5px solid #ccc;
+    }
+    .dam-card.uren { border-left-color: #0066cc; }
+    .dam-card.oshima { border-left-color: #009966; }
+    .dam-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; }
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 5px;
+    }
+    .metric-label { font-size: 0.85rem; color: #555; }
+    .metric-value { font-size: 1.3rem; font-weight: bold; }
+    .uren-text { color: #0066cc; }
+    .oshima-text { color: #009966; }
+    .chart-container { position: relative; height: 450px; width: 100%; }
+  </style>
+</head>
+<body>
+
+  <h1>豊川用水 貯水状況＆流入量ダッシュボード</h1>
+
+  <div class="card">
+    <div class="update-time">最新測定日時: <span id="latest-time" style="font-weight: bold;">-</span></div>
+    
+    <div class="metrics-grid">
+      <!-- 宇連ダム -->
+      <div class="dam-card uren">
+        <div class="dam-title">宇連ダム</div>
+        <div class="metric-row">
+          <span class="metric-label">貯水率</span>
+          <span class="metric-value uren-text" id="uren-rate">- %</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">貯水量</span>
+          <span class="metric-value" id="uren-vol">- 千m³</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">現在流入量</span>
+          <span class="metric-value" id="uren-inflow">- m³/s</span>
+        </div>
+      </div>
+
+      <!-- 大島ダム -->
+      <div class="dam-card oshima">
+        <div class="dam-title">大島ダム</div>
+        <div class="metric-row">
+          <span class="metric-label">貯水率</span>
+          <span class="metric-value oshima-text" id="oshima-rate">- %</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">貯水量</span>
+          <span class="metric-value" id="oshima-vol">- 千m³</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">現在流入量</span>
+          <span class="metric-value" id="oshima-inflow">- m³/s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-container">
+      <canvas id="damChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    async function initDashboard() {
+      try {
+        const response = await fetch('./data/dam_data.json?t=' + new Date().getTime());
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) throw new Error('データがありません');
+
+        const latest = data[data.length - 1];
+        document.getElementById('latest-time').textContent = latest.datetime || '-';
+
+        if (latest.uren) {
+          document.getElementById('uren-rate').textContent = `${latest.uren.storage_rate ?? '-'} %`;
+          document.getElementById('uren-vol').textContent = `${(latest.uren.storage_volume ?? 0).toLocaleString()} 千m³`;
+          document.getElementById('uren-inflow').textContent = `${latest.uren.inflow ?? '-'} m³/s`;
+        }
+
+        if (latest.oshima) {
+          document.getElementById('oshima-rate').textContent = `${latest.oshima.storage_rate ?? '-'} %`;
+          document.getElementById('oshima-vol').textContent = `${(latest.oshima.storage_volume ?? 0).toLocaleString()} 千m³`;
+          document.getElementById('oshima-inflow').textContent = `${latest.oshima.inflow ?? '-'} m³/s`;
+        }
+
+        const labels = data.map(item => item.datetime ? item.datetime.slice(5) : '');
+        
+        const ctx = document.getElementById('damChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              // 貯水率 (左Y軸: yRate)
+              {
+                label: '宇連 貯水率 (%)',
+                data: data.map(item => item.uren?.storage_rate ?? null),
+                borderColor: '#0066cc',
+                backgroundColor: 'rgba(0, 102, 204, 0.05)',
+                yAxisID: 'yRate',
+                tension: 0.2
+              },
+              {
+                label: '大島 貯水率 (%)',
+                data: data.map(item => item.oshima?.storage_rate ?? null),
+                borderColor: '#009966',
+                backgroundColor: 'rgba(0, 153, 102, 0.05)',
+                yAxisID: 'yRate',
+                tension: 0.2
+              },
+              // 流入量 (右Y軸: yInflow / 破線表示)
+              {
+                label: '宇連 流入量 (m³/s)',
+                data: data.map(item => item.uren?.inflow ?? null),
+                borderColor: '#ff9900',
+                borderDash: [5, 5],
+                yAxisID: 'yInflow',
+                tension: 0.2
+              },
+              {
+                label: '大島 流入量 (m³/s)',
+                data: data.map(item => item.oshima?.inflow ?? null),
+                borderColor: '#cc3399',
+                borderDash: [5, 5],
+                yAxisID: 'yInflow',
+                tension: 0.2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              yRate: {
+                type: 'linear',
+                position: 'left',
+                min: 0,
+                max: 100,
+                title: { display: true, text: '貯水率 (%)' }
+              },
+              yInflow: {
+                type: 'linear',
+                position: 'right',
+                min: 0,
+                title: { display: true, text: '流入量 (m³/s)' },
+                grid: { drawOnChartArea: false } // 右軸のグリッド線を重ねない
+              }
+            }
+          }
+        });
+
+      } catch (error) {
+        console.error(error);
+        document.querySelector('.chart-container').innerHTML = 
+          `<p style="color:red; text-align:center; padding-top:50px;">データ読み込み失敗: ${error.message}</p>`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  </script>
+</body>
+</html>
