@@ -1,6 +1,9 @@
 name: Update Dam Data & Deploy Pages
 
 on:
+  push:
+    branches:
+      - main  # mainブランチにPushされた時に実行
   schedule:
     - cron: '0 */2 * * *'
   workflow_dispatch:
