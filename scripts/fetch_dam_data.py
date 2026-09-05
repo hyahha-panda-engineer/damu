@@ -1,7 +1,10 @@
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# 日本時間(JST)のタイムゾーンを定義
+JST = timezone(timedelta(hours=+9), 'JST')
 from typing import Optional, Tuple, Dict, Any
 
 import requests
@@ -102,9 +105,10 @@ def main():
     
     u_vol, u_inflow = fetch_dam_metrics(URLS["uren"])
     o_vol, o_inflow = fetch_dam_metrics(URLS["oshima"])
-
+    # ★日時の取得に JST を指定
+    now_str = datetime.now(JST).strftime('%Y-%m-%d %H:00')
     new_record = {
-        "datetime": datetime.now().strftime('%Y-%m-%d %H:00'),
+        "datetime": now_str,
         "uren": build_dam_data("uren", u_vol, u_inflow),
         "oshima": build_dam_data("oshima", o_vol, o_inflow)
     }
