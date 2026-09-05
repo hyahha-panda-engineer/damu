@@ -1,19 +1,26 @@
-name: Update Dam Data
+name: Update Dam Data & Deploy Pages
 
 on:
   schedule:
-    # 2時間おき（UTC時間。0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22時）
+    # 2時間おきに実行 (UTC)
     - cron: '0 */2 * * *'
-  workflow_dispatch: # 手動実行用ボタンも有効化
+  workflow_dispatch: # 手動実行用
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
 
 jobs:
-  build-and-update:
+  # 1. データ取得とデプロイ準備
+  fetch-and-build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # リポジトリへのCommit & Push権限を設定
-
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -26,19 +33,37 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      - name: Run data fetch script
+      - name: Fetch Dam Data
         run: python scripts/fetch_dam_data.py
 
-      - name: Commit and Push if changed
+      # 更新されたデータを含めてリポジトリにCommit&Push（履歴残し用）
+      - name: Commit and Push json
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/uren_dam.json
-          
-          # 変更がある場合のみコミット
-          if git status --porcelain | grep -q 'data/uren_dam.json'; then
-            git commit -m "auto: Update dam storage data [skip ci]"
+          git add data/dam_data.json
+          if git status --porcelain | grep -q 'data/dam_data.json'; then
+            git commit -m "auto: update dam data"
             git push
-          else
-            echo "No changes to commit"
           fi
+
+      # GitHub Pages用のアートファクト（静的ファイル）をアップロード
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.' # リポジトリ直下の index.html や data/ をそのまま公開
+
+  # 2. Pagesへのデプロイ実行
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: fetch-and-build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
