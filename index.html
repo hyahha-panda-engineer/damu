@@ -71,6 +71,29 @@
     .uren-text { color: var(--accent-orange); }
     .oshima-text { color: var(--accent-yellow); }
 
+    /* グラフコントロール用のスタイルを追加 */
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .chart-header h2 { font-size: 1.1rem; color: var(--text-main); }
+    
+    .select-control {
+      background-color: #2a2a2a;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .select-control:focus {
+      border-color: var(--accent-orange);
+    }
+
     .chart-container { position: relative; height: 450px; width: 100%; }
     .error-msg { color: #f44336; text-align: center; padding: 40px; }
   </style>
@@ -83,7 +106,6 @@
     <div class="update-time">最新測定日時: <span id="latest-time">-</span></div>
     
     <div class="metrics-grid">
-      <!-- 宇連ダム -->
       <div class="dam-card uren">
         <div class="dam-title">宇連ダム</div>
         <div class="metric-row">
@@ -100,7 +122,6 @@
         </div>
       </div>
 
-      <!-- 大島ダム -->
       <div class="dam-card oshima">
         <div class="dam-title">大島ダム</div>
         <div class="metric-row">
@@ -120,15 +141,85 @@
   </div>
 
   <div class="card">
+    <div class="chart-header">
+      <h2>推移グラフ</h2>
+      <div>
+        <label for="dam-select" style="font-size: 0.9rem; color: var(--text-muted); margin-right: 8px;">表示ダム:</label>
+        <select id="dam-select" class="select-control">
+          <option value="uren">宇連ダム</option>
+          <option value="oshima">大島ダム</option>
+          <option value="both">両方表示</option>
+        </select>
+      </div>
+    </div>
     <div class="chart-container">
       <canvas id="damChart"></canvas>
     </div>
   </div>
 
   <script>
-    // Chart.js の全体設定（ダークテーマ用）
     Chart.defaults.color = '#a0a0a0';
     Chart.defaults.font.family = '"Helvetica Neue", Arial, sans-serif';
+
+    let damChartInstance = null;
+    let globalData = [];
+
+    // 選択肢に基づいてデータセットを生成する関数
+    function createDatasets(selectedDam, data) {
+      const urenRate = {
+        label: '宇連 貯水率 (%)',
+        data: data.map(item => item.uren?.storage_rate ?? null),
+        borderColor: '#ff9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+        yAxisID: 'yRate',
+        tension: 0.3,
+        fill: true
+      };
+      
+      const urenInflow = {
+        label: '宇連 流入量 (m³/s)',
+        data: data.map(item => item.uren?.inflow ?? null),
+        borderColor: '#f44336',
+        borderDash: [4, 4],
+        yAxisID: 'yInflow',
+        tension: 0.3
+      };
+
+      const oshimaRate = {
+        label: '大島 貯水率 (%)',
+        data: data.map(item => item.oshima?.storage_rate ?? null),
+        borderColor: '#ffca28',
+        backgroundColor: 'rgba(255, 202, 40, 0.1)',
+        yAxisID: 'yRate',
+        tension: 0.3,
+        fill: true
+      };
+
+      const oshimaInflow = {
+        label: '大島 流入量 (m³/s)',
+        data: data.map(item => item.oshima?.inflow ?? null),
+        borderColor: '#ffeb3b',
+        borderDash: [4, 4],
+        yAxisID: 'yInflow',
+        tension: 0.3
+      };
+
+      if (selectedDam === 'uren') {
+        return [urenRate, urenInflow];
+      } else if (selectedDam === 'oshima') {
+        return [oshimaRate, oshimaInflow];
+      } else {
+        return [urenRate, oshimaRate, urenInflow, oshimaInflow];
+      }
+    }
+
+    // セレクトボックス切り替え時の更新処理
+    function updateChart() {
+      if (!damChartInstance || !globalData.length) return;
+      const selectedDam = document.getElementById('dam-select').value;
+      damChartInstance.data.datasets = createDatasets(selectedDam, globalData);
+      damChartInstance.update();
+    }
 
     async function initDashboard() {
       try {
@@ -137,6 +228,8 @@
         
         const data = await response.json();
         if (!Array.isArray(data) || data.length === 0) throw new Error('データがありません');
+
+        globalData = data; // グローバルにデータを保持
 
         const latest = data[data.length - 1];
         document.getElementById('latest-time').textContent = latest.datetime || '-';
@@ -152,48 +245,15 @@
         updateMetrics('oshima', latest.oshima);
 
         const labels = data.map(item => item.datetime ? item.datetime.slice(5) : '');
-        
         const ctx = document.getElementById('damChart').getContext('2d');
-        new Chart(ctx, {
+        
+        const initialDam = document.getElementById('dam-select').value;
+
+        damChartInstance = new Chart(ctx, {
           type: 'line',
           data: {
             labels: labels,
-            datasets: [
-              {
-                label: '宇連 貯水率 (%)',
-                data: data.map(item => item.uren?.storage_rate ?? null),
-                borderColor: '#ff9800',
-                backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                yAxisID: 'yRate',
-                tension: 0.3,
-                fill: true
-              },
-              {
-                label: '大島 貯水率 (%)',
-                data: data.map(item => item.oshima?.storage_rate ?? null),
-                borderColor: '#ffca28',
-                backgroundColor: 'rgba(255, 202, 40, 0.1)',
-                yAxisID: 'yRate',
-                tension: 0.3,
-                fill: true
-              },
-              {
-                label: '宇連 流入量 (m³/s)',
-                data: data.map(item => item.uren?.inflow ?? null),
-                borderColor: '#f44336', // 流入量は赤系オレンジで区別
-                borderDash: [4, 4],
-                yAxisID: 'yInflow',
-                tension: 0.3
-              },
-              {
-                label: '大島 流入量 (m³/s)',
-                data: data.map(item => item.oshima?.inflow ?? null),
-                borderColor: '#ffeb3b', 
-                borderDash: [4, 4],
-                yAxisID: 'yInflow',
-                tension: 0.3
-              }
-            ]
+            datasets: createDatasets(initialDam, data)
           },
           options: {
             responsive: true,
@@ -216,6 +276,9 @@
             }
           }
         });
+
+        // イベントリスナーの登録
+        document.getElementById('dam-select').addEventListener('change', updateChart);
 
       } catch (error) {
         console.error(error);
