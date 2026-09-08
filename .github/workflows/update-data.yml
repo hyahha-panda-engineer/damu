@@ -5,7 +5,7 @@ on:
     branches:
       - main  # mainブランチにPushされた時に実行
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '17 */2 * * *'
   workflow_dispatch:
 
 permissions:
