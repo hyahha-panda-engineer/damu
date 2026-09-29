@@ -1935,5 +1935,18 @@
       "storage_rate": 68.6,
       "inflow": 3.54
     }
+  },
+  {
+    "datetime": "2026-09-30 04:00",
+    "uren": {
+      "storage_volume": 19129.0,
+      "storage_rate": 67.3,
+      "inflow": 19.87
+    },
+    "oshima": {
+      "storage_volume": 7844.0,
+      "storage_rate": 69.4,
+      "inflow": 6.57
+    }
   }
 ]
